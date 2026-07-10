@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "rules": [
+    {
+      "name": "cdnjs-to-bootcdn",
+      "type": "prefix",
+      "source": "https://cdnjs.cloudflare.com/ajax/libs/",
+      "target": "https://cdn.bootcdn.net/ajax/libs/"
+    },
+    {
+      "name": "jsdelivr-npm-to-npmmirror",
+      "type": "npm_file",
+      "source": "https://cdn.jsdelivr.net/npm/",
+      "target": "https://registry.npmmirror.com/"
+    },
+    {
+      "name": "unpkg-to-npmmirror",
+      "type": "npm_file",
+      "source": "https://unpkg.com/",
+      "target": "https://registry.npmmirror.com/"
+    }
+  ]
+}
