@@ -1,0 +1,127 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+        python-version:
+          - "3.7"
+          - "3.x"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Show Python
+        run: python --version
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: CLI smoke test
+        run: python -m nuiwallfix --version
+
+  package:
+    name: Package portable CLI
+    runs-on: windows-latest
+    needs: test
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.7"
+
+      - name: Build zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $stageParent = Join-Path $env:RUNNER_TEMP 'nui-wallfix-package'
+          $stage = Join-Path $stageParent 'nui-wallfix'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          foreach ($file in @('README.md', 'SECURITY.md', 'providers.json', 'nui-wallfix.cmd', 'nui-wallfix.py')) {
+            Copy-Item -LiteralPath $file -Destination $stage
+          }
+          Copy-Item -LiteralPath 'nuiwallfix' -Destination $stage -Recurse
+
+          $buildInfo = @(
+            'nui-wallfix portable build',
+            "ref=$env:GITHUB_REF_NAME",
+            "commit=$env:GITHUB_SHA",
+            "built_at_utc=$((Get-Date).ToUniversalTime().ToString('o'))"
+          )
+          Set-Content -LiteralPath (Join-Path $stage 'BUILD.txt') -Value $buildInfo -Encoding UTF8
+
+          python (Join-Path $stage 'nui-wallfix.py') --version
+
+          New-Item -ItemType Directory -Force -Path 'dist' | Out-Null
+          Compress-Archive -Path $stage -DestinationPath 'dist/nui-wallfix-windows.zip' -Force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nui-wallfix-windows-${{ github.sha }}
+          path: dist/nui-wallfix-windows.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release tagged build
+    runs-on: windows-latest
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nui-wallfix-windows-${{ github.sha }}
+          path: release
+
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $asset = Join-Path 'release' 'nui-wallfix-windows.zip'
+          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $env:GITHUB_REF_NAME $asset --repo $env:GITHUB_REPOSITORY --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME $asset --repo $env:GITHUB_REPOSITORY --title $env:GITHUB_REF_NAME --generate-notes
+          }
