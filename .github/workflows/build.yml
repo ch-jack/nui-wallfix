@@ -98,14 +98,19 @@ jobs:
           retention-days: 30
 
   release:
-    name: Release tagged build
+    name: Publish official release
     runs-on: windows-latest
     needs: package
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
     permissions:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -120,9 +125,29 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $asset = Join-Path 'release' 'nui-wallfix-windows.zip'
-          gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $env:GITHUB_REF_NAME $asset --repo $env:GITHUB_REPOSITORY --clobber
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $releaseTag = $env:GITHUB_REF_NAME
+            $releaseTitle = $env:GITHUB_REF_NAME
           } else {
-            gh release create $env:GITHUB_REF_NAME $asset --repo $env:GITHUB_REPOSITORY --title $env:GITHUB_REF_NAME --generate-notes
+            $releaseTag = 'latest'
+            $releaseTitle = 'nui-wallfix latest'
+
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -f $releaseTag $env:GITHUB_SHA
+            git push origin "refs/tags/$releaseTag" --force
+          }
+
+          $notes = @(
+            'Official nui-wallfix build.',
+            "Source ref: $env:GITHUB_REF_NAME",
+            "Commit: $env:GITHUB_SHA"
+          ) -join "`n"
+
+          gh release view $releaseTag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $releaseTag $asset --repo $env:GITHUB_REPOSITORY --clobber
+            gh release edit $releaseTag --repo $env:GITHUB_REPOSITORY --title $releaseTitle --notes $notes --draft=false --prerelease=false
+          } else {
+            gh release create $releaseTag $asset --repo $env:GITHUB_REPOSITORY --title $releaseTitle --notes $notes --latest
           }
