@@ -21,12 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - windows-latest
-          - ubuntu-latest
-        python-version:
-          - "3.7"
-          - "3.x"
+        include:
+          - os: windows-latest
+            python-version: "3.7"
+          - os: windows-latest
+            python-version: "3.x"
+          - os: ubuntu-latest
+            python-version: "3.x"
 
     steps:
       - name: Checkout
