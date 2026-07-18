@@ -3,8 +3,8 @@
 from .cli import _load_runtime
 
 
-def scan(target):
-    return _load_runtime().api_scan(target)
+def scan(target, **options):
+    return _load_runtime().api_scan(target, **options)
 
 
 def apply(target, **options):

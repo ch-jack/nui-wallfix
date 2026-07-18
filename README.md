@@ -44,6 +44,29 @@ python -u -m nuiwallfix scan "D:\server\resources"
 
 使用 `python -m nuiwallfix` 时，当前目录需要是 `D:\fivem\nui-wallfix`，或者该目录已经加入 `PYTHONPATH`。
 
+## 每次执行报告
+
+每次 `scan`、`apply` 预览、`apply --write` 和 `restore` 结束时都会自动生成一份独立执行报告。报告不是备份恢复日志，也不会被下一次执行覆盖。
+
+默认目录：
+
+```text
+<target-parent>/.nui-wallfix-reports/YYYY/MM/DD/<execution-id>/
+  report.json
+  report.md
+```
+
+根目录同时维护各操作的最新快捷副本：`latest-scan.*`、`latest-preview.*`、`latest-apply.*`、`latest-restore.*`。可以用 `--report-dir PATH` 把报告集中到工具箱目录，但该目录必须位于目标 resource 树之外。
+
+四种报告分别记录不同内容：
+
+- 扫描：resource、外链位置与类型、自动候选、仅报告原因和诊断；明确本次不联网、不改文件。
+- 预览：每条引用的 remote/local/unresolved/report-only 决策、计划文件和验证方式；明确没有写入和备份。
+- 写入：实际改写文件的前后 SHA-256、备份、Run ID、journal 和恢复能力。
+- 恢复：关联 Apply Run ID、恢复文件、冲突、是否强制以及恢复后的 journal 状态。
+
+输入错误、文件写入错误、恢复冲突和可捕获的中断也会尝试生成失败报告。持久报告会移除 URL 用户信息和 fragment，并把 query 值替换为 `<redacted>`；`--json` 返回的原生 URL 不变。JSON 结果中的 `execution_report` 提供本次历史报告和 latest 文件路径。
+
 ## 三种模式
 
 ### `auto`（推荐）
